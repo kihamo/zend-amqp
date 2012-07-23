@@ -46,7 +46,7 @@ class Kihamo_Queue_Adapter_Amqp extends Zend_Queue_Adapter_AdapterAbstract
             ),
             'send_flags'    => AMQP_MANDATORY,   // AMQP_MANDATORY, AMQP_IMMEDIATE, AMQP_NOPARAM
             'receive_flags' => AMQP_AUTOACK,     // AMQP_AUTOACK
-            'routing_key'   => '',
+            'routing_key'   => '*',
             'channel'       => array(
                 'prefetch_count' => 0,
                 'prefetch_size'  => 0
