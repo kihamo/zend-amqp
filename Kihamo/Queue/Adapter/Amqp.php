@@ -53,7 +53,7 @@ class Kihamo_Queue_Adapter_Amqp extends Zend_Queue_Adapter_AdapterAbstract
             ),
             'exchange'      => array(
                 'flags' => 0,                    // AMQP_PASSIVE  
-                'name'  => 'rocket',
+                'name'  => 'queue_adapter_exchange',
                 'type'  => AMQP_EX_TYPE_DIRECT   // AMQP_EX_TYPE_DIRECT, AMQP_EX_TYPE_FANOUT, AMQP_EX_TYPE_HEADER, AMQP_EX_TYPE_TOPIC
             ),
             'queue'         => array(
@@ -152,6 +152,47 @@ class Kihamo_Queue_Adapter_Amqp extends Zend_Queue_Adapter_AdapterAbstract
         
         reset($queues);
         return current($queues);
+    }
+    
+    /**
+     * Encode message
+     * 
+     * @param mixed $message Message
+     * @return string 
+     */
+    protected function _encodeMessage($message)
+    {
+        switch (gettype($message)) {
+            case 'array':
+            case 'object':
+                $message = base64_encode(serialize($message));
+            break;
+
+            default:
+                $message = (string) $message;
+        }
+        
+        return $message;
+    }
+    
+    /**
+     * Decode message
+     * 
+     * @param string $message Message
+     * @return mixed 
+     */
+    protected function _decodeMessage($message)
+    {
+        $decodeMessage = base64_decode($message);
+        if($decodeMessage !== false) {
+            $decodeMessage = @unserialize($decodeMessage);
+            
+            if($decodeMessage !== false) {
+                return $decodeMessage;
+            }
+        }
+        
+        return $message;
     }
 
     public function beginTransaction()
@@ -275,8 +316,10 @@ class Kihamo_Queue_Adapter_Amqp extends Zend_Queue_Adapter_AdapterAbstract
             $queue = $this->_queue;
         }
 
+        $message = $this->_encodeMessage($message);
+
         $this->_exchange->publish(
-            (string) $message,
+            $message,
             $this->_options['driverOptions']['routing_key'],
             $this->_options['driverOptions']['send_flags'],
             $this->_options['driverOptions']['attributes']
@@ -292,9 +335,9 @@ class Kihamo_Queue_Adapter_Amqp extends Zend_Queue_Adapter_AdapterAbstract
             'queue' => $queue,
             'data'  => array(
                 'message_id' => null,
+                'handle'     => null,
                 'body'       => $message,
-                'md5'        => md5($message),
-                'handle'     => null
+                'md5'        => md5($message)
             )
         ));
     }
@@ -323,17 +366,17 @@ class Kihamo_Queue_Adapter_Amqp extends Zend_Queue_Adapter_AdapterAbstract
             $amqpQueue = $this->_getAmpqQueueByZendQueue($queue);
 
             for ($i = 0; $i < $maxMessages; $i++) {
-                $message = $amqpQueue->get($this->_options['driverOptions']['receive_flags']);
+                $envelope = $amqpQueue->get($this->_options['driverOptions']['receive_flags']);
 
-                if(!$message) {
+                if(!$envelope) {
                     break;
                 }
-                
+
                 $messages[] = array(
-                    'message_id' => $message->getMessageId(),
-                    'handle'     => $message->getMessageId(),
-                    'body'       => $message->getBody(),
-                    'md5'        => md5($message->getBody())
+                    'message_id' => $envelope->getMessageId(),
+                    'handle'     => $envelope->getMessageId(),
+                    'body'       => $this->_decodeMessage($envelope->getBody()),
+                    'md5'        => md5($envelope->getBody())
                 );
             }
         }
